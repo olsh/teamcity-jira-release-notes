@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<meta-runner name="Generate Jira Release Notes">
+  <description>Generates release notes for current build using Jira API</description>
+  <settings>
+    <parameters>
+      <param name="changelog.jira.url" value="http://example.com" spec="text label='Jira URL' display='normal'" />
+      <param name="changelog.jira.username" spec="text label='Jira user' validationMode='not_empty' display='normal'" />
+      <param name="changelog.jira.password" spec="text label='Jira password' validationMode='not_empty' display='normal'" />
+      <param name="changelog.teamcity.username" spec="text label='TeamCity user' validationMode='not_empty' display='normal'" />
+      <param name="changelog.teamcity.password" spec="text label='TeamCity password' validationMode='not_empty' display='normal'" />
+      <param name="changelog.output.filename" value="%system.teamcity.build.tempDir%\release_notes.md" spec="text label='Output file' validationMode='not_empty' display='normal'" />
+      <param name="changelog.version" spec="text label='Release version (optional)' display='normal'" />
+    </parameters>
+    <build-runners>
+      <runner name="" type="jetbrains_powershell">
+        <parameters>
+          <param name="jetbrains_powershell_execution" value="PS1" />
+          <param name="jetbrains_powershell_noprofile" value="true" />
+          <param name="jetbrains_powershell_script_code"><![CDATA[<#
+    This script is based on article:
+    https://blogg.bekk.no/generating-a-project-change-log-with-teamcity-and-powershell-45323f956437
+#>
+
+$buildId = "%teamcity.build.id%"
+$buildNumber = "%build.number"
+$releaseVersion = "%changelog.version%"
+$outputFile = "%changelog.output.filename%"
+$teamcityUrl = "%teamcity.serverUrl%"
+$jiraUrl = "%changelog.jira.url%"
+$teamCityAuthToken = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("%changelog.teamcity.username%:%changelog.teamcity.password%"))
+$jiraAuthToken = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("%changelog.jira.username%:%changelog.jira.password%"))
+
+# Requests TeamCity API and retruns XML
+function RequestTeamCityApi([string] $url)
+{
+    Write-Host "Request TeamCity API: " + $url
+    
+    $request = [System.Net.WebRequest]::Create($url)     
+    $request.Headers.Add("Authorization", "Basic $teamCityAuthToken");
+
+    [xml](new-object System.IO.StreamReader $request.GetResponse().GetResponseStream()).ReadToEnd()    
+}
+
+# Requests Jira API and returns JSON
+function RequestJiraApi([string] $url)
+{
+    Write-Host "Request Jira API: " + $url
+
+    $request = [System.Net.WebRequest]::Create($url)     
+    $request.Headers.Add("Authorization", "Basic $authToken");
+
+    (new-object System.IO.StreamReader $request.GetResponse().GetResponseStream()).ReadToEnd() | ConvertFrom-Json
+}
+
+# Formats XML to readable commit message
+function FormatCommitsInfo([xml] $commitsInfoXml)
+{
+   Microsoft.PowerShell.Utility\Select-Xml $commitsInfoXml -XPath "/change" |
+        foreach { "* $($_.Node.version) - $($_.Node["user"].name, $_.Node["user"].username, $_.Node.username | Select -First 1): $($_.Node["comment"].InnerText)" }
+}
+
+# Gets Jira issues by keys and format them
+function GetJiraIssues([string[]] $jiraIssueKeys)
+{
+    $jiraIssueKeys | 
+        foreach { RequestJiraApi($jiraUrl + "/rest/api/2/issue/" + $_) } |
+        foreach { "* [$($_.key)]($($jiraUrl)/browse/$($_.key)): $($_.fields.summary)`n" }
+
+}
+
+$buildInfo = RequestTeamCityApi("$teamcityUrl/app/rest/changes?locator=build:$($buildId)")
+$commitsInfo = Microsoft.PowerShell.Utility\Select-Xml $buildInfo -XPath "/changes/change" | 
+                foreach { RequestTeamCityApi("$teamcityUrl/app/rest/changes/id:$($_.Node.id)") };
+
+if ($commitsInfo -ne $null)
+{
+    $jiraIssueKeys = Microsoft.PowerShell.Utility\Select-Xml $commitsInfo -XPath "/change/comment/text()" | 
+                    Select-String -Pattern "\b(\w{2,}-\d+)\b" -AllMatches |
+                    foreach { $_.Matches } |
+                    foreach { $_.Value } |
+                    select -uniq
+}
+
+if ($releaseVersion -ne $null)
+{
+	$changelog = "Release notes for version " + $releaseVersion
+}
+else
+{
+	$changelog = "Release notes for build " + $buildNumber
+}
+
+$changelog += "`n"
+
+if ($jiraIssues -ne $null)
+{
+    $changelog = "#### Issues:  `n`n "
+    $changelog += GetJiraIssues($jiraIssueKeys)
+    $changelog += "`n`n"
+}
+
+if ($commitsInfo -ne $null)
+{
+    $changelog += "#### Commit messages:  `n`n "
+    $changelog += FormatCommitsInfo($commitsInfo)
+}
+
+$changelog > $outputFile
+
+Write-Host "Changelog saved to ${outputFile}"]]></param>
+          <param name="jetbrains_powershell_script_mode" value="CODE" />
+          <param name="teamcity.step.mode" value="default" />
+        </parameters>
+      </runner>
+    </build-runners>
+    <requirements />
+  </settings>
+</meta-runner>
