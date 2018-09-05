@@ -62,10 +62,21 @@ function FormatCommitsInfo($commitsInfoXml)
 # Gets Jira issues by keys and format them
 function GetJiraIssues($jiraIssueKeys)
 {
-    $jiraIssueKeys | 
-        foreach { RequestJiraApi($jiraUrl + "/rest/api/2/issue/" + $_) } |
-        foreach { "* [$($_.key)]($($jiraUrl)/browse/$($_.key)): $($_.fields.summary)`n" }
+    $result = ""
+    foreach ($key in $jiraIssueKeys)
+    {
+        Try 
+        {
+            $jiraJson = RequestJiraApi($jiraUrl + "/rest/api/2/issue/" + $key)
+            $result += "* [$($key)]($($jiraUrl)/browse/$($key)): $($jiraJson.fields.summary)`n"
+        }
+        Catch
+        {
+            Write-Host "Unable to get information for $key" 
+        }
+    }
 
+    return $result
 }
 
 $buildInfo = RequestTeamCityApi("$teamcityUrl/app/rest/changes?locator=build:$($buildId)")
@@ -75,7 +86,7 @@ $commitsInfo = Microsoft.PowerShell.Utility\Select-Xml $buildInfo -XPath "/chang
 if ($commitsInfo -ne $null)
 {
     $jiraIssueKeys = Microsoft.PowerShell.Utility\Select-Xml $commitsInfo -XPath "/change/comment/text()" | 
-                    Select-String -Pattern "\b(\w{2,}-\d+)\b" -AllMatches |
+                    Select-String -Pattern "\b([A-Z]{2,10}-\d+)\b" -AllMatches -CaseSensitive |
                     foreach { $_.Matches } |
                     foreach { $_.Value } |
                     select -uniq
@@ -94,7 +105,7 @@ $changelog += "`n"
 
 if ($jiraIssueKeys -ne $null)
 {
-    $changelog = "#### Issues:  `n`n "
+    $changelog = "#### Issues:  `n`n"
     $changelog += GetJiraIssues($jiraIssueKeys)
     $changelog += "`n`n"
 }
