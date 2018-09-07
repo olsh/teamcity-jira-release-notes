@@ -1,5 +1,5 @@
 # TeamCity Jira release notes generator
-The TeamCity meta-runner generates release notes for the current build using TeamCity and Jira API
+The TeamCity meta-runner generates release notes for the current build using TeamCity and Jira API.  
 The meta-runner was tested with TeamCity 2018.1 and Jira 7
 
 ## TeamCity meta-runner
