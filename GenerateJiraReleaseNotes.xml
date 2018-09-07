@@ -68,7 +68,7 @@ function GetJiraIssues($jiraIssueKeys)
         Try 
         {
             $jiraJson = RequestJiraApi($jiraUrl + "/rest/api/2/issue/" + $key)
-            $result += "* [$($key)]($($jiraUrl)/browse/$($key)): $($jiraJson.fields.summary)`n"
+            $result += "* [$($key) [$($jiraJson.fields.status.name)]]($($jiraUrl)/browse/$($key)): $($jiraJson.fields.summary)`n"
         }
         Catch
         {
@@ -94,11 +94,11 @@ if ($commitsInfo -ne $null)
 
 if ($releaseVersion -ne $null)
 {
-	$changelog = "Release notes for version " + $releaseVersion
+  $changelog = "Release notes for version " + $releaseVersion
 }
 else
 {
-	$changelog = "Release notes for build " + $buildNumber
+  $changelog = "Release notes for build " + $buildNumber
 }
 
 $changelog += "`n"
