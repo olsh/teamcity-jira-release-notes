@@ -3,12 +3,14 @@
   <description>Generates release notes for current build using Jira API</description>
   <settings>
     <parameters>
+      <param name="changelog.teamcity.external.url" value="%teamcity.serverUrl%" spec="text label='Teamcity External URL' display='normal'" />
       <param name="changelog.jira.url" value="http://example.com" spec="text label='Jira URL' display='normal'" />
       <param name="changelog.jira.username" spec="text label='Jira user' validationMode='not_empty' display='normal'" />
       <param name="changelog.jira.password" spec="text label='Jira password' validationMode='not_empty' display='normal'" />
       <param name="changelog.teamcity.username" spec="text label='TeamCity user' validationMode='not_empty' display='normal'" />
       <param name="changelog.teamcity.password" spec="text label='TeamCity password' validationMode='not_empty' display='normal'" />
       <param name="changelog.output.filename" value="%system.teamcity.build.tempDir%\release_notes.md" spec="text label='Output file' validationMode='not_empty' display='normal'" />
+      <param name="changelog.output.metadata.filename" value="%system.teamcity.build.tempDir%\build_metadata.json" spec="text label='Metadata output file' validationMode='not_empty' display='normal'" />
       <param name="changelog.version" spec="text label='Release version (optional)' display='normal'" />
     </parameters>
     <build-runners>
@@ -22,10 +24,13 @@
 #>
 
 $buildId = "%teamcity.build.id%"
-$buildNumber = "%build.number"
+$buildNumber = "%build.number%"
 $releaseVersion = "%changelog.version%"
+$latestCommit = "%build.vcs.number%"
 $outputFile = "%changelog.output.filename%"
+$metaDataFile = "%changelog.output.metadata.filename%"
 $teamcityUrl = "%teamcity.serverUrl%"
+$teamcityExternalUrl = "%changelog.teamcity.external.url%"
 $jiraUrl = "%changelog.jira.url%"
 $teamCityAuthToken = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("%changelog.teamcity.username%:%changelog.teamcity.password%"))
 $jiraAuthToken = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("%changelog.jira.username%:%changelog.jira.password%"))
@@ -56,7 +61,19 @@ function RequestJiraApi($url)
 function FormatCommitsInfo($commitsInfoXml)
 {
    Microsoft.PowerShell.Utility\Select-Xml $commitsInfoXml -XPath "/change" |
-        foreach { "* $($_.Node.version) - $($_.Node["user"].name, $_.Node["user"].username, $_.Node.username | Select -First 1): $($_.Node["comment"].InnerText)" }
+        foreach { "* $($_.Node.version) - $($_.Node["user"].name, $_.Node["user"].username, $_.Node.username | Select -First 1): $($_.Node["comment"].InnerText)`r`n" }
+}
+
+# Formats XML to readable commit message
+function AddCommitsToMetaData($commitsInfoXml, $metaData)
+{
+   Microsoft.PowerShell.Utility\Select-Xml $commitsInfoXml -XPath "/change" |
+        foreach {
+			$metaData.Commits += @{
+				Id = $_.Node.version
+				Comment = $_.Node["comment"].InnerText
+			}
+		}
 }
 
 # Gets Jira issues by keys and format them
@@ -114,7 +131,24 @@ if ($commitsInfo -ne $null)
 {
     $changelog += "#### Commit messages:  `n`n "
     $changelog += FormatCommitsInfo($commitsInfo)
+
+    $metadata = [ordered]@{
+        BuildEnvironment = "TeamCity"
+        CommentParser = "Jira"
+        BuildNumber = $buildNumber
+        BuildUrl = "$teamcityExternalUrl/viewLog.html?buildId=$buildId"
+        VcsType = "git"
+        VcsRoot = ""
+        VcsCommitNumber = "$latestCommit"
+        Commits = @()
+    }
+
+	AddCommitsToMetaData -commitsInfoXml $commitsInfo -metaData $metadata
+	
+    $jsonString = $metadata | ConvertTo-Json -Depth 10
+    Set-Content -Value $jsonString -Path $metaDataFile
 }
+
 
 $changelog > $outputFile
 
@@ -127,3 +161,4 @@ Write-Host "Changelog saved to ${outputFile}"]]></param>
     <requirements />
   </settings>
 </meta-runner>
+
