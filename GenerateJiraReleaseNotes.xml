@@ -23,17 +23,17 @@
     https://blogg.bekk.no/generating-a-project-change-log-with-teamcity-and-powershell-45323f956437
 #>
 
-$buildId = "%teamcity.build.id%"
-$buildNumber = "%build.number%"
-$releaseVersion = "%changelog.version%"
-$latestCommit = "%build.vcs.number%"
-$outputFile = "%changelog.output.filename%"
-$metaDataFile = "%changelog.output.metadata.filename%"
-$teamcityUrl = "%teamcity.serverUrl%"
-$teamcityExternalUrl = "%changelog.teamcity.external.url%"
-$jiraUrl = "%changelog.jira.url%"
-$teamCityAuthToken = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("%changelog.teamcity.username%:%changelog.teamcity.password%"))
-$jiraAuthToken = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("%changelog.jira.username%:%changelog.jira.password%"))
+$buildId = '%teamcity.build.id%'
+$buildNumber = '%build.number%'
+$releaseVersion = '%changelog.version%'
+$latestCommit = '%build.vcs.number%'
+$outputFile = '%changelog.output.filename%'
+$metaDataFile = '%changelog.output.metadata.filename%'
+$teamcityUrl = '%teamcity.serverUrl%'
+$teamcityExternalUrl = '%changelog.teamcity.external.url%'
+$jiraUrl = '%changelog.jira.url%'
+$teamCityAuthToken = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes('%changelog.teamcity.username%:%changelog.teamcity.password%'))
+$jiraAuthToken = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes('%changelog.jira.username%:%changelog.jira.password%'))
 
 # Requests TeamCity API and retruns XML
 function RequestTeamCityApi($url)
